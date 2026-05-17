@@ -178,4 +178,37 @@ export const fetchBuletin = async () => {
   }
 };
 
+export const fetchTeacherDetails = async (nip: string) => {
+  try {
+    const response = await api.get(`/api/jbssdm/pegawai/${nip}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching teacher details:', error);
+    return { status: 'gagal', data: null };
+  }
+};
+
+export const searchStudentByPhone = async (phone: string) => {
+  try {
+    const response = await api.get(`/api/jbsakad/siswa/search?hportu=${phone}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error searching student:', error);
+    return { status: 'gagal', data: [] };
+  }
+};
+
+export const sendWhatsAppMessage = async (number: string, text: string) => {
+  try {
+    const response = await axios.post('/api/whatsapp/send', {
+      number,
+      text,
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Error sending WhatsApp message:', error);
+    return { status: 'error', message: error.response?.data?.message || 'Gagal mengirim pesan' };
+  }
+};
+
 export default api;

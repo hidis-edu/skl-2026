@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { UserCircle, Key, LogIn, ShieldCheck, GraduationCap, Briefcase } from 'lucide-react';
-import { motion } from 'motion/react';
-import { loginSiswa, loginPegawai } from '../services/api';
+import { UserCircle, Key, LogIn, ShieldCheck, GraduationCap, Briefcase, MessageCircle, RefreshCw, X, Smartphone } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { loginSiswa, loginPegawai, searchStudentByPhone, sendWhatsAppMessage } from '../services/api';
 import { UserRole } from '../types';
 
 interface LoginViewProps {
@@ -18,6 +18,68 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [pin, setPin] = useState('');
   const [nip, setNip] = useState('');
   const [password, setPassword] = useState('');
+
+  // Forgot credentials states
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotStatus, setForgotStatus] = useState<{ type: 'error' | 'success', message: string } | null>(null);
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPhone) return;
+
+    setForgotLoading(true);
+    setForgotStatus(null);
+
+    try {
+      // 1. Search student by phone (use raw input for DB search as suggested by user example)
+      const res = await searchStudentByPhone(forgotPhone);
+      
+      if ((res.status === 'sukses' || res.success) && res.data) {
+        // Normalize data to array if it is a single object
+        const students = Array.isArray(res.data) ? res.data : [res.data];
+        
+        if (students.length === 0) {
+          setForgotStatus({ type: 'error', message: 'Nomor HP tidak terdaftar.' });
+          return;
+        }
+
+        // 2. Format message using correct fields (pinsiswa)
+        let message = `*INFO LOGIN HIDIS*\n\nBerikut adalah data login siswa yang ditemukan:\n\n`;
+        students.forEach((s: any, idx: number) => {
+          const studentPin = s.pinsiswa || s.pin || 'Tidak diset';
+          message += `${idx + 1}. *${s.nama}*\n   NIS: \`${s.nis}\`\n   PIN: \`${studentPin}\`\n\n`;
+        });
+        message += `_Gunakan data di atas untuk login ke aplikasi Hidis._`;
+
+        // 3. Send via WA (Normalization required for Gateway)
+        const normalizePhone = (phone: string) => {
+          let clean = phone.replace(/\D/g, "");
+          if (clean.startsWith("0")) {
+            clean = "62" + clean.substring(1);
+          } else if (clean.startsWith("8")) {
+            clean = "62" + clean;
+          }
+          return clean;
+        };
+
+        const waRes = await sendWhatsAppMessage(normalizePhone(forgotPhone), message);
+        
+        if (waRes.success || waRes.key || waRes.messageId || waRes.status === 'sukses' || waRes.status === 'success') {
+          setForgotStatus({ type: 'success', message: 'Data NIS/PIN telah dikirim ke WhatsApp Anda!' });
+        } else {
+          throw new Error('Gagal mengirim WhatsApp. Cek koneksi gateway.');
+        }
+      } else {
+        setForgotStatus({ type: 'error', message: 'Nomor HP tidak terdaftar atau tidak ditemukan.' });
+      }
+    } catch (err: any) {
+      setForgotStatus({ type: 'error', message: err.message || 'Terjadi kesalahan sistem.' });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +188,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   />
                 </div>
               </div>
+
+              <div className="flex justify-end">
+                <button 
+                  type="button"
+                  onClick={() => setShowForgotModal(true)}
+                  className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-700 transition-colors"
+                >
+                  Lupa NIS/PIN?
+                </button>
+              </div>
             </>
           ) : (
             <>
@@ -193,6 +265,92 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       </div>
       
       <p className="text-center mt-8 text-[10px] font-bold text-slate-300 uppercase tracking-widest">© 2026 HIDIS Education Systems</p>
+
+      {/* Forgot Credentials Modal */}
+      <AnimatePresence>
+        {showForgotModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-5"
+          >
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowForgotModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
+            />
+            
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden p-8"
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                  <MessageCircle className="h-6 w-6 text-indigo-600" />
+                </div>
+                <button 
+                  onClick={() => setShowForgotModal(false)}
+                  className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <h3 className="text-lg font-black text-slate-800 leading-tight">Lupa NIS/PIN?</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 mb-6">Masukkan Nomor HP Orang Tua yang terdaftar</p>
+
+              <form onSubmit={handleForgotSubmit} className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">WhatsApp Number</p>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-0 pointer-events-none">
+                      <Smartphone className="h-3 w-3 text-indigo-400" />
+                    </div>
+                    <input 
+                      type="text"
+                      required
+                      value={forgotPhone}
+                      onChange={(e) => setForgotPhone(e.target.value)}
+                      className="w-full bg-transparent border-none focus:ring-0 text-sm font-black text-slate-700 pl-6 p-0"
+                      placeholder="628123xxx"
+                    />
+                  </div>
+                </div>
+
+                {forgotStatus && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-3 rounded-xl text-[9px] font-black uppercase text-center ${
+                      forgotStatus.type === 'success' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-red-600 border border-red-100'
+                    }`}
+                  >
+                    {forgotStatus.message}
+                  </motion.div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {forgotLoading ? (
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-3 w-3" />
+                  )}
+                  {forgotLoading ? 'Mencari...' : 'Terima Data via WA'}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

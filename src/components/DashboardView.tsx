@@ -19,7 +19,8 @@ import {
   Star,
   Info,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RealTimeChart } from './RealTimeChart';
@@ -31,11 +32,13 @@ import {
   fetchClassSchedule, 
   fetchTeacherSchedule, 
   fetchAllTeachers, 
+  fetchTeacherDetails,
   fetchGraduationData, 
   fetchBeritaSekolah,
   fetchBeritaGuru,
   fetchBeritaSiswa,
   fetchBuletin,
+  sendWhatsAppMessage,
   getBaseUrl 
 } from '../services/api';
 import { User, DashboardMetric } from '../types';
@@ -64,7 +67,86 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ user, onLogout }) 
   const [beritaData, setBeritaData] = useState<any[]>([]);
   const [beritaLoading, setBeritaLoading] = useState(false);
   const [selectedNews, setSelectedNews] = useState<any>(null);
+  const [whatsappTeacher, setWhatsappTeacher] = useState<any>(null);
+  const [whatsappMessage, setWhatsappMessage] = useState("Assalamu'alaikum...");
+  const [sendingWa, setSendingWa] = useState(false);
   
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  
+  const normalizePhone = (phone: string) => {
+    if (!phone) return "";
+    let clean = phone.replace(/\D/g, "");
+    
+    // Indonesia specific normalization
+    if (clean.startsWith("0")) {
+      clean = "62" + clean.substring(1);
+    } else if (clean.startsWith("8")) {
+      clean = "62" + clean;
+    } else if (clean.length > 0 && !clean.startsWith("62")) {
+      // If it's something else and doesn't have country code, could be risky 
+      // but usually 8xx is the start for Indo numbers
+    }
+    
+    return clean;
+  };
+  
+  const handleOpenWA = async (teacher: any) => {
+    // If we already have the number, just open it
+    if (teacher.handphone || teacher.hp || teacher.telepon) {
+      setWhatsappTeacher(teacher);
+      setWhatsappMessage(`Assalamu'alaikum ${teacher.nama}, ...`);
+      return;
+    }
+
+    // Otherwise fetch details
+    setDetailsLoading(true);
+    try {
+      const res = await fetchTeacherDetails(teacher.nip);
+      if (res.status === 'sukses' && res.data) {
+        setWhatsappTeacher(res.data);
+        setWhatsappMessage(`Assalamu'alaikum ${res.data.nama}, ...`);
+      } else {
+        // Still open but might show error later
+        setWhatsappTeacher(teacher);
+        setWhatsappMessage(`Assalamu'alaikum ${teacher.nama}, ...`);
+      }
+    } catch (err) {
+      console.error(err);
+      setWhatsappTeacher(teacher);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+  
+  const handleSendWhatsApp = async () => {
+    if (!whatsappTeacher || !whatsappMessage.trim()) return;
+    
+    setSendingWa(true);
+    try {
+      const rawNumber = whatsappTeacher.handphone || whatsappTeacher.hp || whatsappTeacher.telepon || whatsappTeacher.telpon || ""; 
+      if (!rawNumber) {
+        console.error('No phone number found for teacher:', whatsappTeacher);
+        // We can't send without a number
+        setWhatsappTeacher(null);
+        return;
+      }
+      const number = normalizePhone(rawNumber);
+      
+      const result = await sendWhatsAppMessage(number, whatsappMessage);
+      
+      if (result.success || result.key || result.status === 'sukses' || result.status === 'success' || result.messageId) {
+        setWhatsappTeacher(null);
+        setWhatsappMessage("Assalamu'alaikum...");
+      } else {
+        console.error('WhatsApp Result Error:', result);
+      }
+    } catch (err) {
+      console.error('WhatsApp Error:', err);
+    } finally {
+      setSendingWa(false);
+    }
+  };
+
   const [academicSubTab, setAcademicSubTab] = useState<'my' | 'all'>('my');
   const [allTeachers, setAllTeachers] = useState<any[]>([]);
   const [allTeachersLoading, setAllTeachersLoading] = useState(false);
@@ -807,16 +889,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ user, onLogout }) 
                                 </div>
                              </div>
                           </div>
-                          <motion.button 
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => {
-                              setViewingTeacher(teacher);
-                              setAcademicSubTab('my');
-                            }}
-                            className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-indigo-600 hover:text-white transition-colors"
-                          >
-                             <Search className="h-4 w-4" />
-                          </motion.button>
+                          <div className="flex items-center gap-2">
+                            <motion.button 
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleOpenWA(teacher)}
+                              disabled={detailsLoading}
+                              className="h-8 w-8 rounded-xl bg-green-50 flex items-center justify-center text-green-600 hover:bg-green-600 hover:text-white transition-colors disabled:opacity-50"
+                              title="Kirim WhatsApp"
+                            >
+                               {detailsLoading ? (
+                                 <RefreshCw className="h-4 w-4 animate-spin text-green-400" />
+                               ) : (
+                                 <MessageCircle className="h-4 w-4" />
+                               )}
+                            </motion.button>
+                            <motion.button 
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => {
+                                setViewingTeacher(teacher);
+                                setAcademicSubTab('my');
+                              }}
+                              className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-indigo-600 hover:text-white transition-colors"
+                            >
+                               <Search className="h-4 w-4" />
+                            </motion.button>
+                          </div>
                         </motion.div>
                       ))}
                     </div>
@@ -1203,6 +1300,81 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ user, onLogout }) 
                       </a>
                     )}
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* WhatsApp Modal */}
+      <AnimatePresence>
+        {whatsappTeacher && (
+           <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-5"
+          >
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setWhatsappTeacher(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
+            />
+            
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden p-8"
+            >
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="h-16 w-16 rounded-[24px] bg-green-50 flex items-center justify-center mb-4 border border-green-100">
+                  <MessageCircle className="h-8 w-8 text-green-600" />
+                </div>
+                <h3 className="text-lg font-black text-slate-800 leading-tight">Kirim WhatsApp</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Ke: {whatsappTeacher.nama}</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Pesan Anda</p>
+                  <textarea 
+                    value={whatsappMessage}
+                    onChange={(e) => setWhatsappMessage(e.target.value)}
+                    className="w-full bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 p-0 resize-none h-32 no-scrollbar"
+                    placeholder="Tulis pesan..."
+                  />
+                </div>
+
+                {!(whatsappTeacher.handphone || whatsappTeacher.hp || whatsappTeacher.telepon || whatsappTeacher.telpon) && (
+                  <div className="p-3 bg-red-50 rounded-xl border border-red-100 flex items-center gap-2">
+                    <Info className="h-3 w-3 text-red-500" />
+                    <p className="text-[9px] font-bold text-red-600 uppercase">Nomor HP tidak ditemukan!</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setWhatsappTeacher(null)}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={handleSendWhatsApp}
+                    disabled={sendingWa || !(whatsappTeacher.handphone || whatsappTeacher.hp || whatsappTeacher.telepon || whatsappTeacher.telpon)}
+                    className="flex-[2] py-3.5 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-100 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {sendingWa ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <MessageCircle className="h-3 w-3" />
+                    )}
+                    {sendingWa ? 'Mengirim...' : 'Kirim Sekarang'}
+                  </button>
                 </div>
               </div>
             </motion.div>
