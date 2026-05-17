@@ -49,8 +49,8 @@ export const RealTimeChart: React.FC<ChartProps> = ({ type, data, dataKey, color
         </div>
       </div>
       
-      <div className="relative h-56 w-full min-h-[14rem]">
-        <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={0}>
+      <div className="relative h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
           {type === 'area' ? (
             <AreaChart data={data}>
               <defs>

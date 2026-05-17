@@ -29,11 +29,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       if (role === 'siswa') {
         userData = await loginSiswa('siswa', nis, pin);
       } else {
-        userData = await loginPegawai(nip, password);
+        userData = await loginPegawai('pegawai', nip, password);
       }
       
       onLoginSuccess({
-        id: userData.replid || userData.id,
+        id: userData.replid || userData.id || userData.nip || userData.nis,
         name: userData.nama || userData.name,
         role: role,
         nis: userData.nis,

@@ -26,8 +26,10 @@ export const loginSiswa = async (status: string, nis: string, pin: string) => {
       nis,
       pin,
     });
-    if (response.data.status === 'sukses') {
-      return response.data.data;
+    
+    // Support both "status": "sukses" and "success": true
+    if (response.data.status === 'sukses' || response.data.success === true) {
+      return response.data.data || response.data.user;
     }
     throw new Error(response.data.message || 'Login Gagal');
   } catch (error: any) {
@@ -35,14 +37,17 @@ export const loginSiswa = async (status: string, nis: string, pin: string) => {
   }
 };
 
-export const loginPegawai = async (nip: string, password: string) => {
+export const loginPegawai = async (status: string, nip: string, password: string) => {
   try {
     const response = await api.post('/api/jbsuser/login', {
+      status,
       nip,
       password,
     });
-    if (response.data.status === 'sukses') {
-      return response.data.data;
+    
+    // Support both "status": "sukses" and "success": true
+    if (response.data.status === 'sukses' || response.data.success === true) {
+      return response.data.data || response.data.user;
     }
     throw new Error(response.data.message || 'Login Gagal');
   } catch (error: any) {
@@ -103,6 +108,26 @@ export const fetchClassSchedule = async (idkelas: number) => {
   }
 };
 
+export const fetchTeacherSchedule = async (nip: string) => {
+  try {
+    const response = await api.get(`/api/jbsakad/guru/${nip}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching teacher schedule:', error);
+    return { success: false, data: {} };
+  }
+};
+
+export const fetchAllTeachers = async () => {
+  try {
+    const response = await api.get('/api/jbsakad/guru');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching all teachers:', error);
+    return { success: false, data: [] };
+  }
+};
+
 export const fetchGraduationData = async (nis: string) => {
   try {
     const response = await api.get(`/api/gas/data/${nis}`);
@@ -110,6 +135,46 @@ export const fetchGraduationData = async (nis: string) => {
   } catch (error) {
     console.error('Error fetching graduation data:', error);
     return null;
+  }
+};
+
+export const fetchBeritaSekolah = async () => {
+  try {
+    const response = await api.get('/api/jbsvcr/berita-sekolah');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching school news:', error);
+    return { success: false, data: [] };
+  }
+};
+
+export const fetchBeritaGuru = async () => {
+  try {
+    const response = await api.get('/api/jbsvcr/berita-guru');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching teacher news:', error);
+    return { success: false, data: [] };
+  }
+};
+
+export const fetchBeritaSiswa = async () => {
+  try {
+    const response = await api.get('/api/jbsvcr/berita-siswa');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching student news:', error);
+    return { success: false, data: [] };
+  }
+};
+
+export const fetchBuletin = async () => {
+  try {
+    const response = await api.get('/api/jbsvcr/buletin');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching bulletin:', error);
+    return { success: false, data: [] };
   }
 };
 
